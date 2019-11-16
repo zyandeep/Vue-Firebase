@@ -3,7 +3,6 @@
     <div class="card shadow-sm">
       <div class="card-body">
         <form v-on:submit.prevent="onFormSubmit">
-
           <div class="form-group">
             <label for="email">Email address:</label>
             <input
@@ -11,7 +10,7 @@
               class="form-control"
               id="email"
               v-model.trim="user.email"
-              v-on:input="$v.user.email.$touch()"
+              v-on:change="$v.user.email.$touch()"
               v-bind:class="emailClass"
             />
             <small
@@ -22,20 +21,31 @@
 
           <div class="form-group">
             <label for="age">Your Age:</label>
-            <input type="text" class="form-control" id="age" v-model.number="user.age" 
-            v-on:input="$v.user.age.$touch()" 
-            v-bind:class="ageClass"/>
+            <input
+              type="text"
+              class="form-control"
+              id="age"
+              v-model.number="user.age"
+              v-on:input="$v.user.age.$touch()"
+              v-bind:class="ageClass"
+            />
 
-             <small
+            <small
               class="form-text text-muted"
               v-show="$v.user.age.$error"
-            >You have to be atleast {{ $v.user.age.$params.minValue.min }}+ years. </small>
+            >You have to be atleast {{ $v.user.age.$params.minValue.min }}+ years.</small>
           </div>
 
           <div class="form-group">
             <label for="password">Password:</label>
-            <input type="password" class="form-control" id="password" v-model="user.pwd" 
-            v-on:change="$v.user.pwd.$touch()" v-bind:class="{ 'is-invalid': $v.user.pwd.$error }" />
+            <input
+              type="password"
+              class="form-control"
+              id="password"
+              v-model="user.pwd"
+              v-on:change="$v.user.pwd.$touch()"
+              v-bind:class="{ 'is-invalid': $v.user.pwd.$error }"
+            />
           </div>
 
           <div class="form-group">
@@ -53,7 +63,7 @@
           <div class="form-group">
             <label for="country">Country:</label>
             <select class="form-control" id="country" v-model="user.country">
-              <option value="">*** Pick a Country ***</option>
+              <option value>*** Pick a Country ***</option>
               <option value="usa">USA</option>
               <option value="india">India</option>
               <option value="uk">UK</option>
@@ -74,20 +84,22 @@
               <input
                 type="text"
                 v-bind:placeholder=" `Hobby #${i}` "
-                required
+                v-on:input="$v.user.hobbies.$touch()"
                 v-model.trim="user.hobbies[i-1]"
               />
               <span class="ml-2 remove-hobby" v-on:click="removeHobby(i-1)">❌</span>
             </p>
           </div>
 
-          <p>{{ $v.user.hobbies }}</p>
-
           <div class="form-group form-check">
-            <input type="checkbox" id="cbox" class="form-check-input" 
-            v-model="user.accept" 
-            v-on:change="$v.user.accept.$touch()" 
-            v-bind:class="{ 'is-invalid': $v.user.accept.$error }" />
+            <input
+              type="checkbox"
+              id="cbox"
+              class="form-check-input"
+              v-model="user.accept"
+              v-on:change="$v.user.accept.$touch()"
+              v-bind:class="{ 'is-invalid': $v.user.accept.$error }"
+            />
 
             <label class="form-check-label" for="cbox">Accept Terms of Use</label>
           </div>
@@ -108,10 +120,18 @@
 
 <script>
 import myFirebase from "../my-firebase.js";
-import { required, email, numeric, minValue, minLength, sameAs, helpers } from "vuelidate/lib/validators";
+import {
+  required,
+  email,
+  numeric,
+  minValue,
+  minLength,
+  sameAs,
+  helpers
+} from "vuelidate/lib/validators";
 
 // Add necessary firebase service
-// const DB = myFirebase.db();
+const DB = myFirebase.db();
 const AUTH = myFirebase.auth();
 
 export default {
@@ -127,7 +147,7 @@ export default {
         country: "",
         hobbies: [],
         accept: false
-      },
+      }
     };
   },
 
@@ -142,7 +162,7 @@ export default {
       return {
         "is-invalid": this.$v.user.age.$error,
         "is-valid": this.$v.user.age.$dirty && this.$v.user.age.minValue
-      }    
+      };
     }
   },
 
@@ -154,11 +174,8 @@ export default {
     onFormSubmit() {
       // Input validation required
 
-      console.log(this.$v);
-
-  
-/*       if (this.user.pwd !== this.user.confPwd) {
-        window.alert("Passwords need to be Matched!");
+      if (this.$v.$invalid) {
+        window.alert("Please fill up the form correctly!");
         return;
       }
 
@@ -202,7 +219,7 @@ export default {
           this.user.country = "";
           this.user.hobbies = [];
           this.user.accept = false;
-        }); */
+        });
     }
   },
 
@@ -210,7 +227,41 @@ export default {
     user: {
       email: {
         required,
-        email
+        email,
+        isUnique(value) {
+          // Sync validation returns True
+
+          if (value === "") {
+            return true;
+          }
+
+          // Run aync code
+          return DB.collection("users")
+            .where("email", "==", value)
+            .get()
+            .then(querySnapshot => {
+
+              if (querySnapshot.empty) {
+                 // no doc exits
+
+                return new Promise((resolve, reject) => {
+                  resolve(true);
+                });
+              } 
+              else {
+                 // doc already exist
+
+                return new Promise((resolve, reject) => {
+                  reject();
+                });
+              }
+            })
+            .catch(error => { 
+              return new Promise((resolve, reject) => {
+                reject(false);
+              });
+            });
+        }
       },
       age: {
         required,
@@ -230,34 +281,30 @@ export default {
         myValid: (value, vm) => {
           if (vm.country === "germany") {
             return true;
-          }
-          
-          else {
+          } else {
             return value;
           }
         }
       },
       hobbies: {
-        myArr: (value) => {
+        required,
+
+        myArr: value => {
           // check each value of the array can't be empty
 
           if (helpers.len(value)) {
-            
             let isOK = true;
 
             value.forEach(item => {
-
               if (!helpers.len(item)) {
                 isOK = false;
               }
-            })
+            });
 
             return isOK;
-          }
-          else {
+          } else {
             return false;
           }
-
         }
       }
     }
@@ -268,8 +315,7 @@ export default {
       if (user) {
         // User alreday signed in
         next({ name: "dashboard", query: { signedIn: true } });
-      } 
-      else {
+      } else {
         next();
       }
     });
